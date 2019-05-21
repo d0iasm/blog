@@ -23,7 +23,7 @@ github_username: d0iasm
 
 # Build settings
 markdown: kramdown
-theme: jekyll-theme-minima
+theme: jekyll-theme-minimal
 plugins:
   - jekyll-feed
 
