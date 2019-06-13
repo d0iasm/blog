@@ -48,7 +48,7 @@ TODO: Cache-As-RAM、スタックポインタの設定、BSS 用のメモリク�
 
 以下はそれぞれのステージが UEFI のステージとどのように対応しているかの図です。
 
-![coreboot architecture]({{ site.url }}/assets/comparision_coreboot_uefi.svg)
+![coreboot architecture]({{ site.url }}/blog/assets/comparision_coreboot_uefi.svg)
 [coreboot architecture][coreboot arch] より引用
 
 <br />
