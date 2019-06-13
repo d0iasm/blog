@@ -9,18 +9,22 @@ GSoC2019 の一環として参加している [coreboot][coreboot] プロジェ�
 
 現在の coreboot では QEMU を使用したシミュレーションをサポートしており、対象のプラットフォームは x86、ARM、POWER8、RISC-V です。私のプロジェクトで加えることになる AArch64 は ARM アーキテクチャのうち ARMv8 以降の64bitの実行モードです。
 
-QEMU/ARM でサポートしているマシンは vexpress-a9、CPU は cortex-a9 です。coreboot のルートディレクトリにおいて `$ qemu-system-arm -bios ./build/coreboot.rom -M vexpress-a9 -nographic` と実行した際に、Linux Kernel や GRUB2 などの任意のペイロードに処理を渡すまでを解説します。
+本記事では、coreboot のルートディレクトリにて   
+`$ qemu-system-arm -bios ./build/coreboot.rom -M vexpress-a9 -nographic`  
+と実行した際に、Linux Kernel や GRUB2 などの任意のペイロードに処理を渡すまでを解説します。
 
 <br />
 ## Architecture
-coreboot は Bootblock、Romstage、Ramstage と呼ばれる3つのステージから成り立ちます。それぞれのステージはコンパイル時には別のバイナリとして生成されます。そして最後に全てのバイナリをリンクし、ROM に書き込むためのファームウェア `coreboot.rom` を生成します。なぜ最終的には1つのバイナリにするのに、途中ではバラバラなバイナリとして生成するのかは、最初のステージ以外は LZMA 圧縮アルゴリズムを用いてサイズを縮小するためです。1つ前のステージが次のステージを解凍し、実行権を渡すことで進んでいきます。
+coreboot は Bootblock、Romstage、Ramstage と呼ばれる3つのステージから成り立ちます。それぞれのステージはコンパイル時には別のバイナリとして生成されます。そして最後に全てのバイナリをリンクし、ROM に書き込むためのファームウェア `coreboot.rom` を生成します。なぜ最終的には1つのバイナリにするのに、途中ではバラバラなバイナリとして生成するのかは、最初のステージ以外は LZMA 圧縮アルゴリズムを用いてサイズを縮小するためです。RAM よりも容量の制限が厳しい ROM では、圧縮によってサイズが小さくすることが利点となります。現在のステージが次のステージを解凍し、呼び出すことで進んでいきます。
 
 各ステージの役割は、  
 **Bootblock**
-1. ヒープとスタックを使用するためのCache-As-RAM: DRAM の初期化を行う以前は CPU Cache を記憶領域として使用します。これにより、初期の頃から高級言語でコードを書くことが可能です。以前は Cache の代わりに全てローカル変数をレジスタに格納することによって、この問題を解決していました。ROMCC という特殊なコンパイラによって、ローカル変数をレジスタの値に置き換えていたようです。
+1. ヒープとスタックを使用するためのCache-As-RAM: DRAM の初期化を行う以前は CPU Cache を記憶領域として使用します。これにより、初期の頃から高級言語でコードを書くことが可能です。 *1
 2. スタックポインタの設定
 3. BSS 用のメモリをクリア
 4. 次の Romstage を解凍し、メイン関数を呼び出す
+
+*1: 以前は Cache の代わりに全てローカル変数をレジスタに格納することによって、この問題を解決していました。ROMCC という特殊なコンパイラによって、ローカル変数をレジスタの値に置き換えていたようですが、ROMCC の開発が1人のエンジニアに依存しており、x86 以外の他のアーキテクチャのサポートが難しかったため、Cache-As-RAM に変更をしたそうです。
 
 TODO: Cache-As-RAM、スタックポインタの設定、BSS 用のメモリクリアについてはアセンブリで書かれているようで、まだコードを読めていないです。もしかしたら、x86 特有の処理だったりもするかも。
 
@@ -50,17 +54,17 @@ TODO: Cache-As-RAM、スタックポインタの設定、BSS 用のメモリク�
 <br />
 ## Code Reading
 C言語で書かれた Bootblock -> Romstage -> Ramstage -> Payload の一連の処理についてコードを読みました。各ステージにおけるエントリポイントは以下の通りです。
-* Bootblock: main() at [src/lib/bootblock.c][bootblock]
-* Romstage: main() at [src/mainboard/emulation/qemu-armv7/romstage.c][romstage]
-* Ramstage: main() at [src/lib/hardwaremain.c][ramstage]
+* Bootblock: main() - [src/lib/bootblock.c][bootblock]
+* Romstage: main() - [src/mainboard/emulation/qemu-armv7/romstage.c][romstage]
+* Ramstage: main() - [src/lib/hardwaremain.c][ramstage]
 
 各ステージが共通で行う処理は、
 1. 現在のステージで必要な初期化処理等を行う
 2. 次のステージに関する情報を `prog` 構造体によって管理する
 
-この2つのステップを各ステージにて繰り返すことによって、処理を行っています。
+この2つのステップを各ステージにて繰り返すことによって、処理を進めています。
 
-次のステージ実体は以下の `prog` 構造体によって管理されます。1つ前のステージが次のステージの `prog` 構造体の初期化をします。 `entry` には関数ポインタが格納され、現ステージでの処理が終わったらこれを呼ぶことよって、次のステージに移動します。
+ステージ実体は以下の `prog` 構造体によって管理されます。現在のステージが次のステージの `prog` 構造体の初期化をします。 `entry` には関数ポインタが格納され、現ステージでの処理が終わったらこれを呼ぶことよって、次のステージに移動します。
 
 {% highlight c %}
 // src/include/program_loading.h
@@ -82,8 +86,8 @@ struct prog {
 };
 {% endhighlight %}
 
-
-Ramstage では `boot_state` 構造体の配列によってこのステージで必要な処理を管理し、順に実行していきます。`id` に現在の状態、`run_state` に処理の関数ポインタを格納します。そして、処理が終わったら `complete` フラグを立て、次の処理に移動します。
+<br />
+Ramstage では `boot_state` 構造体の配列によって必要な処理を管理し、順に実行していきます。`id` に現在の状態、`run_state` に処理の関数ポインタを格納します。そして、処理が終わったら `complete` フラグを立て、次の処理に移動します。
 
 {% highlight c %}
 // src/lib/hardwaremain.c
@@ -124,7 +128,7 @@ struct boot_state {
 
 <br />
 ## Conclusion
-全体として、アーキテクチャ依存のコードが多くなりすぎず、うまく構造化して綺麗にまとまっているなという感想を持ちました。しかしまだC言語レベルでのざっくりとした理解しかできていないので、アセンブリ、マクロでの処理も引き続き読み進めていきたいです。
+全体として、アーキテクチャ依存のコードが多くなりすぎず、うまく構造化して綺麗にまとまっているなという感想を持ちました。しかしまだC言語レベルでのざっくりとした理解しかできていないので、アセンブリでの処理も引き続き読み進めていきたいです。
 
 感想、疑問等あればお気軽に[@d0iasm][d0iasm]まで。
 
