@@ -1,0 +1,128 @@
+digraph G {
+  node[shape=square, width=1];
+  
+  // COMMON
+  subgraph cluster_common {
+      subgraph cluster_console {
+          style=filled;
+          color=lightgrey;
+          console_init;
+          label="console/init.c"
+      }
+    subgraph cluster_exception {
+      style=filled;
+      color=lightgrey;
+      exception_init;
+      label="arch/arm/armv7/exception.c"
+    }
+    subgraph cluster_prog_loaders {
+      style=filled;
+      color=lightgrey;
+      PROG_INIT;
+          prog_locate;
+          run_romstage;
+          run_ramstage;
+          load_nonrelocatable_ramstage;
+          payload_run;
+      label="lib/prog_loaders.c"
+    }
+    label="Common libraries"
+  }
+  
+  // BOOTBLOCK
+  subgraph cluster_bootblock {
+      edge[color="blue"]
+      subgraph cluster_bootblock {
+          style=filled;
+          color=lightgrey;
+          main_boot[label="main", color="blue", style=filled, fontcolor=white];
+          label="lib/bootblock.c"
+      }
+  subgraph cluster_cbfs {
+      style=filled;
+      color=lightgrey;
+      cbfs_prepare_program_locate;
+      cbfs_boot_locate;
+      cbfs_prog_state_load;
+      label="lib/cbfs.c"
+  }
+  subgraph cluster_commonlib_cbfs {
+      style=filled;
+      color=lightgrey;
+      cbfsf_file_type;
+      label="commonlib/cbfs.c"
+  }
+  subgraph cluster_commonlib_include_cbfs {
+      style=filled;
+      color=lightgrey;
+      cbfs_file_date;
+      label="commonlib/include/commonlib/cbfs.c"
+  }
+  subgraph cluster_prog_ops {
+      style=filled;
+      color=lightgrey;
+      prog_run;
+      label="lib/prog_ops.c"
+  }
+      main_boot -> console_init -> exception_init -> run_romstage; 
+      run_romstage -> PROG_INIT -> prog_locate -> cbfs_prepare_program_locate -> cbfs_boot_locate -> cbfsf_file_type -> cbfs_file_date -> cbfs_prog_state_load -> prog_run;
+      label="Bootblock"
+  }
+
+
+  // ROMSTAGE
+  subgraph cluster_romstage {
+      edge[color="red"]
+      subgraph cluster_armv7_romstage {
+          style=filled;
+          color=lightgrey;
+          main_rom[label="main", color="red", style=filled, fontcolor=white];
+          label="mainboard/emulation/qemu-armv7/romstaage.c"
+      }
+      prog_run -> main_rom -> console_init -> run_ramstage;
+      run_ramstage -> PROG_INIT -> prog_locate -> cbfs_prepare_program_locate -> cbfs_boot_locate -> cbfsf_file_type -> cbfs_file_date -> load_nonrelocatable_ramstage -> cbfs_prog_state_load -> prog_run;
+      label="Romstage"
+  }
+  
+  // RAMSTAGE
+  subgraph cluster_ramstage {
+      edge[color="green"]
+      subgraph cluster_imd_cbmem {
+          style=filled;
+          color=lightgrey;
+          cbmem_initialize;
+          label="lib/imd_cbmem.c"
+      }
+      subgraph cluster_thread {
+          style=filled;
+          color=lightgrey;
+          threads_initialize;
+          label="lib/thread.c"
+      }
+      subgraph cluster_hardwaremain {
+          style=filled;
+          color=lightgrey;
+          ada_init;
+          boot_state_schedule_static_entries;
+          boot_state_sched_on_entry;
+          boot_state_sched_callback;
+          boot_state_sched_callback;
+          bs_call_callbacks;
+          run_state;
+          main_ram[label="main", color="green", style=filled, fontcolor=white];
+          label="lib/hardwaremain.c"
+      }
+      prog_run -> main_ram -> ada_init -> console_init -> cbmem_initialize;
+      cbmem_initialize -> exception_init -> threads_initialize -> boot_state_schedule_static_entries;
+      boot_state_schedule_static_entries -> boot_state_sched_on_entry -> boot_state_sched_callback;
+      boot_state_sched_callback -> bs_call_callbacks -> run_state;
+      run_state -> payload_run;
+      label="Ramstage"
+  }
+  
+  entry->main_boot;
+  payload_run -> payload;
+
+  entry [shape=Msquare];
+  payload [shape=Msquare];
+}
