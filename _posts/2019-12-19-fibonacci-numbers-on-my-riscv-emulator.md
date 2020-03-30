@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  Fibonacci Numbers on My RISC-V Emulator
+title:  自作RISC-Vエミュレータ上でフィボナッチ数列を計算した
 date:   2019-12-19 9:00 +0900
 categories: risc-v
 ---

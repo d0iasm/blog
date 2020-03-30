@@ -1,6 +1,6 @@
 ---
 layout: post
-title:  Code Reading of Coreboot Project for  QEMU/ARM
+title:  coreboot (QEMU/ARM) のコードリーディング
 date:   2019-06-13 9:00 +0900
 categories: coreboot
 ---
