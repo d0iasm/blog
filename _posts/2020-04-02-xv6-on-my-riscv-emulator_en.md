@@ -5,12 +5,12 @@ date:   2020-04-02 9:00 +0900
 categories: risc-v
 ---
 
-I've made a RISC-V emulator that can run [xv6][xv6-riscv], a simple Unix-like OS for education. All the source code of the emulator is available in the [d0iasm/rvemu][rvemu] repository. In this article, I'm going to introduce emulator's features implemented for running the OS, by looking back at the source code of the commit that made the major changes.
+I've made a RISC-V emulator that can run [xv6][xv6-riscv], a simple Unix-like OS for education. All the source code of the emulator is available in the [d0iasm/rvemu][rvemu] repository. In this article, I'm going to introduce emulator's features implemented for running the OS, by looking back at the source code that made major changes.
 
-Note: The source code at each point in time is not necessarily the correct implementation, as I repeatedly fixed implementation errors later.
+Note: The source code at each point in time is not necessarily the correct implementation, as I sometimes fixed implementation errors after the commit.
 
 ### October 22, 2019 ([143c7d5: src/lib.rs][1022])
-This is the first commit after creating a repository. I used the template in the tutorial of [Rust and WebAssembly][rust-and-webassembly], because I wanted to use Rust for my curiosity and compile it to WebAssembly to run the emulator in the browser. [Wasm-bindgen][wasm-bindgen] imported in `src/lib.rs` is the library to communicate with Rust and JavaScript.
+This is the first commit after creating a repository. I used the template in the tutorial of [Rust and WebAssembly][rust-and-webassembly] because I wanted to use Rust for my curiosity and compile it to WebAssembly to run the emulator in the browser. [Wasm-bindgen][wasm-bindgen] imported in `src/lib.rs` is the library to communicate with Rust and JavaScript.
 
 There's nothing yet to function as an emulator.
 
@@ -19,14 +19,14 @@ I implemented `add` instruction to add two registers, and `addi` instruction to 
 
 RISC-V is an open standard instruction set architecture, and you can download PDFs of the specification from [riscv.org/specifications][riscv.org/specifications]. First, I'm going to implement a CPU instruction one by one by reading *Volume I: Unprivileged ISA* in the specifications.
 
-The role of a CPU is to execute a program consisting of binary 0 and 1 sequentially by three steps: fetching, decoding, and execution.
+The role of a CPU is to execute a program consisting of binaries sequentially by three steps: fetching, decoding, and execution.
 
 1. Fetch: Fetches the next instruction to be executed from the memory where the program is stored.
 2. Decode: Splits an instruction sequence into a form that makes sense to the CPU. How to interpret the instruction is defined in *Volume I: Unprivileged ISA* at [riscv.org/specifications][riscv.org/specifications].
 3. Execute: Performs the action required by the instruction. In hardware, arithmetic operations such as addition and subtraction are performed by ALU (Arithmetic logic unit), but in the emulator I decided to implement it without worrying about small components.
 
 ### November 11, 2019 ([2d59abc: src/cpu.rs][1111])
-I implemented RV32I instructions for basic integer operations for 32-bit architecture.
+I implemented RV32I instructions, which defines basic integer operations for 32-bit architecture.
 
 The basic integer operations should be implemented in all platforms. In addition, other instructions can be extended to suit the application. The basic integer operations for 32-bit architectures are called RV32I, and the basic integer operations for 64-bit architectures are called RV64I.
 
@@ -41,10 +41,12 @@ In *Volume I: Unprivileged ISA*, a combination of a base ISA (RV32I or RV64I) pl
 
 RV32I defines 40 instructions, but I implemented 37 instructions except for `fence`, `ecall`, and `ebreak`. `fence` is an instruction to keep the memory consistency between multiple hardware threads. If you have multiple hardware threads, you have multiple program counters storing the location of the instruction to be executed next. The more hardware threads exist, the more programs that can be executed at the same time, which leads to higher speed.
 
-Since the emulator only implements one hardware thread, I decided that `fence` is unnecessary for now. Also, `ecall` and `ebreak` will be required when implementing the privileged modes defined in *Volume II: Privileged Architecture*, but not yet implemented at this time.
+Since the emulator only implements one hardware thread, I decided that `fence` is unnecessary for now. Also, `ecall` and `ebreak` will be required when implementing the privilege modes defined in *Volume II: Privileged Architecture*, but not yet implemented at this time.
 
 ### November 18, 2019 ([caea7c6: src/cpu.rs][1118])
-I implemented RV64I by adding 12 instructions to RV32I, and the registers are extended to 64 bits. The basic operation is the same as the RV32I, but the effective bit width is different. For example, `add` instruction in RV32I is to add two 32-bit wide registers, but `add` instruction in RV64I is to add two 64-bit wide registers. To add 32-bit wide registers, `addw` is added in RV64I.
+I implemented RV64I by adding 12 instructions to RV32I and the registers are extended to 64 bits.
+
+The basic operations in RV64I is the same as RV32I, but the effective number of bits is different. For example, `add` instruction in RV32I is to add two 32-bit registers, but `add` instruction in RV64I is to add two 64-bit registers. `Addw` is used in RV64I to add two 32-bit registers.
 
 ### November 19, 2019 ([44c0584: src/cpu.rs][1119])
 I implemented RV64M, which defines instructions for multiplication and division.
