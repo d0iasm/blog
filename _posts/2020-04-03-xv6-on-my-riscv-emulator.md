@@ -70,7 +70,7 @@ I implemented RV64D, which defines double-precision floating point operations. T
 
 It is basically the same as single-precision floating-point operations (RV64F). The rounding modes are not properly implemented this time as well. (I'll do it someday.)
 
-### January 5, 2020 (533ea69: src/cpu.rs)
+### January 5, 2020 ([533ea69: src/cpu.rs][0105])
 I implemented RV64A, which defines the atomic instructions.
 
 RV64A are instructions to maintain memory consistency across multiple hardware threads. In x86, an atomic instruction called [compare-and-swap (CAS)][cas] is famously defined. It compares the contents of a memory location with a given value and, only if they are the same, modifies the contents of that memory location to a new given value. In other words, we can guarantee that the content of a particular memory location have not been changed. However, it just makes sure that the value has not changed, the thread that makes the compare-and-swap instruction may misidentify that "there was no change" because if another thread changes the original value A to a different value B, and then rewrites it to the original value A again, the value appears to remain A. This problem is called the [ABA problem][ABA problem].
@@ -113,16 +113,16 @@ The `ecall` instruction raises an exception of `environment-call-from-M-mode` if
 ### March 9, 2020 ([7cc38ab: src/devices/uart.rs][0309])
 I implemented UART (A universal asynchronous receiver-transmitter), which is a peripheral device for serial communication between the CPU and the outside the CPU.
 
-RISC-V communicates with peripheral devices by memory-mapped I/O. Memory-mapped I/O is a method of exchanging data by reading and writing to specific addresses where registers of peripheral devices exist, and can be handled by CPU in the same way as memory access. The location of a specific address is not listed in the RISC-V specifications and is (probably) determined by the designer of a motherboard. I adopted QEMU's virt machine in this time.
+RISC-V communicates with peripheral devices by memory-mapped I/O. Memory-mapped I/O is a method of exchanging data by reading and writing specific addresses where registers of peripheral devices exist, and can be handled by CPU in the same way as memory access. The location of a specific address is not listed in the RISC-V specifications and is (probably) determined by the designer of a motherboard. I adopted QEMU's virt machine in this time.
 
 If we look at [the implementation of QEMU][qemu virt], we can see that UART is mapped from the position of `0x10000000` with the size of `0x100`. In addition, if we look at [the implementation of UART in xv6][xv6 uart], it says "16550a UART" is adopted and [the specification of this UART][uart spec] can be accessed from the web.
 
 There are 5 types of registers in the specification but I just implemented the features used in xv6.
 
 ### March 13, 2020 ([ea77341: src/cpu.rs][0313])
-I implemented address translation by virtual memory mechanism. A physical address is translated by the [`translate`][translate] function before accessing the memory.
+I implemented address translation by virtual memory system. A physical address is translated by the [`translate`][translate] function before accessing the memory.
 
-Until now, when the CPU specified an address, it would communicate with the memory and memory-mapped peripherals without modifying the address. This is called a physical address. When the virtual memory mechanism is enabled, the address handled by the CPU is called a virtual address, and it is necessary to convert the address into a physical address. The virtual memory mechanism is enabled by the value of the `mode` field in the `stap` control and status register. In hardware, MMU (memory management unit) is often in charge of address translation, but in this emulator it is implemented in CPU.
+Until now, when the CPU specified an address, it would communicate with the memory and memory-mapped peripherals without modifying the address. This is called a physical address. When the virtual memory system is enabled, the address handled by the CPU is called a virtual address, and it is necessary to convert the address into a physical address. The virtual memory system is enabled by the value of the `mode` field in the `stap` control and status register. In hardware, MMU (memory management unit) is often in charge of address translation, but in this emulator it is implemented in CPU.
 
 RISC-V defines 3 types of address translation methods: Sv32, Sv39, and Sv48. I implemented only Sv39 this time, which has a virtual memory address width of 39 bits so it can use up to `512GiB (=2**39)` memory.
 
@@ -133,21 +133,21 @@ I implemented PLIC (a platform-level interrupt controller) to control interrupts
 
 PLIC is one of the memory mapped devices as well as UART, and if we look at [the implementation of QEMU][qemu virt], we can see that PLIC is mapped from the position of `0xc000000` with the size of `0x4000000`.
 
-The main function of PLIC is to tell which peripheral interrupted which hardware thread. [Xv6's implementation of interrupts][xv6 plic claim] shows that the function `plic_claim` gets a value from PLIC which identifies which peripheral interrupted. [Xv6's implementation of PLIC][xv6 plic] shows that the function `plic_claim` just reads a memory-mapped value at the position of `PLIC_SCLAIM`. Therefore, it should write a value that identifies the peripheral devices at this address when an interrupt occurs although it's not implemented yet at this point.
+The main function of PLIC is to tell which peripheral interrupted which hardware thread. [Xv6's implementation of interrupts][xv6 plic claim] shows that the function `plic_claim` gets a value from PLIC that identifies which peripheral interrupted. [Xv6's implementation of PLIC][xv6 plic] shows that the function `plic_claim` just reads a memory-mapped value from `PLIC_SCLAIM`. Therefore, it should write a value that identifies the peripheral devices at this address when an interrupt occurs although it's not implemented yet at this point.
 
 ### March 18, 2020 ([1e7964f: src/interrupt.rs][0318 interrupt])
 I implemented interrupts.
 
-Until now, UART and PLIC peripherals that have been implemented have only been able to read and write values that exist at memory-mapped addresses, but have not yet been able to make interrupts occur.
+Until now, UART and PLIC peripherals have only been able to read and write values that exist at memory-mapped addresses, but have not yet been able to make interrupts occur.
 
-When an interrupt occurs in [`src/interrupt.rs`][rvemu plic claim], the value to identify the peripheral is written to the `sclaim` register in PLIC. This allows the interrupt handler in an OS to read this value and identify which peripheral device generated the interrupt.
+When an interrupt occurs, the value to identify the peripheral is written to the `sclaim` register in PLIC in [`src/interrupt.rs`][rvemu plic claim]. This allows the interrupt handler in an OS to read this value and identify which peripheral device generated the interrupt.
 
 ### March 18, 2020 ([e535d27: src/devices/clint.rs][0318 clint])
 I implemented CLINT (a core-local interruptor) for timer interrupts.
 
 CLINT is one of the memory mapped devices as well as UART and PLIC, and [the implementation of QEMU][qemu virt] shows that CLINT is mapped from the position of `0x2000000` with the size of `0x10000`.
 
-If we look at [the xv6 implementation][xv6 timerinit] that initializes the timer, we can see that the 1000000 value of the interval time plus `MTIME` is written to the `CLINT_MTIMECMP` position. A timer interrupt occurs when the value of the `MTIME` register, which counts the number of cycles executed by the CPU, becomes larger than `MTIMECMP`.
+If we look at [the xv6 implementation][xv6 timerinit] that initializes a timer, we can see that the sum of the interval time (1000000) and `MTIME` is written to the `CLINT_MTIMECMP` position. A timer interrupt occurs when the value of the `MTIME` register, which counts the number of cycles executed by the CPU, becomes larger than `MTIMECMP`.
 
 ### March 20, 2020 ([c225992: src/devices/virtio.rs][0320])
 I implemented the part of reading and writing a disk via virtio which is a disk and network interface.
@@ -160,7 +160,7 @@ I didn't read [virtio's specification][virtio spec], but I implemented the emula
 Xv6 works now. The functions implemented so far are as follows. However, I haven't been able to implement correctly rounding modes in floating-point numbers and atomicity in atomic instructions yet, but since xv6 is running, I don't think the CPU instructions needed as much as I do.
 - RV64G ISAs
 - Privilege levels
-- Control and status registers 
+- Control and status registers
 - Virtual memory system (Sv39)
 - UART
 - CLINT
@@ -168,6 +168,8 @@ Xv6 works now. The functions implemented so far are as follows. However, I haven
 - Virtio
 
 As a next step, I'm trying to support Linux on my emulator.
+
+Thank you for reading this article. Comments and questions are always welcome to [@d0iasm][@d0iasm].
 
 [xv6-riscv]: https://github.com/mit-pdos/xv6-riscv
 [rvemu]: https://github.com/d0iasm/rvemu
@@ -209,3 +211,4 @@ As a next step, I'm trying to support Linux on my emulator.
 [xv6 virtio_disk_rw]: https://github.com/mit-pdos/xv6-riscv/blob/riscv/kernel/virtio_disk.c#L168-L249
 [virtio spec]: https://docs.oasis-open.org/virtio/virtio/v1.1/virtio-v1.1.pdf
 [riscv-rust/mmu.rs]: https://github.com/takahirox/riscv-rust/blob/master/src/mmu.rs
+[@d0iasm]: https://twitter.com/d0iasm
