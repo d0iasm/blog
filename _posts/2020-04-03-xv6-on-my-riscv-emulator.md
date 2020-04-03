@@ -1,7 +1,7 @@
 ---
 layout: post
 title:  Made a RISC-V Emulator Running Xv6
-date:   2020-04-02 9:00 +0900
+date:   2020-04-03 9:00 +0900
 categories: risc-v
 ---
 
