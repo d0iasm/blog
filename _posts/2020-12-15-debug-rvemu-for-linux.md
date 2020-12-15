@@ -14,7 +14,7 @@ categories: risc-v
 エミュレータがサポートしている機能は以下の通りです。
 
 - **RV64GC**: OSを動かすために十分なISA。基本演算、掛け算・割り算演算、浮動小数演算、アトミック命令などを含みます。
-- **特権モード**: マシンモード、スーパーバイザーモード、ユーザーモード
+- **特権モード**: CPUの動作モードでCPUが実行できる操作を制限することができる。マシンモード、スーパーバイザーモード、ユーザーモードの3種類を実装。
 - **関連するステータスレジスタ**: CPUの状態を保存するレジスタ。仕様で決められているうち、xv6とLinuxで使用されている一部を実装。
 - **仮想メモリ機構**: Sv32、Sv39、Sv48の3種類のアドレス変換方法が定義されているがSv39のみをサポート。仮想メモリのアドレス幅が39ビット。
 - **周辺機器**
@@ -28,17 +28,17 @@ categories: risc-v
 
 Linuxを自作エミュレータ上で動かすことが今の目標ですが、まだ完成には至っていません。機能的には上記であげたもので十分なはずなのですが、バグが潜んでいたり、未実装な部分があるために、現在はカーネルの実行が途中で止まります。デバッグして、バグを見つけ、直す、をひたすら繰り返して進めていくうちに、いくつか面白いバグを自作エミュレータに見つけました。
 
-本記事で使用されるLinuxカーネルはv4.19-rc3のバージョンで、[この記事](https://risc-v-getting-started-guide.readthedocs.io/en/latest/linux-qemu.html)に沿ってビルドしました。
+本記事で使用するLinuxカーネルはv4.19-rc3のバージョンで、[この記事](https://risc-v-getting-started-guide.readthedocs.io/en/latest/linux-qemu.html)に沿ってビルドしました。
 
 ## 自作エミュレータ上のバグ
 
-### Bug 1: console_init()で無限ループ
+### **Bug 1**: console_init()で無限ループ
 
 Linuxカーネルにはさまざまな初期化処理を行う`start_kernel`関数があります。そのうちの[`console_init`関数を呼び出す](https://elixir.bootlin.com/linux/v4.19-rc3/source/init/main.c#L661)と、その先に実行が進まなくなってしまいました。エミュレータが実行しているプログラムカウンタから実行している箇所を調べると、無限ループに陥っているようです。
 
 `console_init`関数は文字を出力するためのコンソールを初期化する関数です。本来ならば、文字の入出力にはPLIC（CPU外部からの割り込みを制御するための機器）が必要なのですが、この時点ではPLICの初期化はまだ行われていません。早めにコンソールの初期化をはじめるのは、少しでも早く文字出力を行ってデバッグなどを行いやすくするためです。
 
-### Fix 1: デバイスツリーのbootargsでコンソールの指定
+### **Fix 1**: デバイスツリーのbootargsでコンソールの指定
 
 QEMUと自作エミュレータのブートログの出力を見比べていてバグを発見しました。QEMUではKernel comamnd lineが `root=/dev/vda ro console=ttyS0`となっていましたが、自作エミュレータでは空でした。
 
@@ -83,7 +83,7 @@ chosen {
 
 QEMUではQEMUの実行時に`-append "root=/dev/vda ro console=ttyS0"`のパラメータを渡すことで、動的にデバイスツリーのバイナリを変更しているようです。
 
-### Bug 2: vfs_caches_init()で無限ループ
+### **Bug 2**: vfs_caches_init()で無限ループ
 
 再び無限ループです。次は`start_kernel`関数の中の[`vfs_caches_init`関数を呼び出す](https://elixir.bootlin.com/linux/v4.19-rc3/source/init/main.c#L717)と、その先に実行が進まなくなってしまいました。
 
@@ -100,7 +100,7 @@ ffffffe000346d4e:       57fd                    li      a5,-1
 ...  
 ```
 
-### Fix 2: Load-Reserved/Store-Conditional命令を正しく実装
+### **Fix 2**: Load-Reserved/Store-Conditional命令を正しく実装
 
 `_raw_write_lock`関数はロックを取得しようとしている関数です。ロックとは排他制御を行うための機構で、複数のプロセスやスレッドが環境で、リソースへのアクセスを制限することができます。
 
