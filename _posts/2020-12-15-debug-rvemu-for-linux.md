@@ -40,13 +40,48 @@ Linuxカーネルにはさまざまな初期化処理を行う`start_kernel`関�
 
 ### Fix 1: デバイスツリーのbootargsでコンソールの指定
 
+QEMUと自作エミュレータのブートログの出力を見比べていてバグを発見しました。QEMUではKernel comamnd lineが `root=/dev/vda ro console=ttyS0`となっていましたが、自作エミュレータでは空でした。
+
+```
+// log in QEMU
+[    0.000000] Kernel command line: root=/dev/vda ro console=ttyS0 
+```
+
+```
+// log in my emulator
+[    0.000000] Kernel command line:   
+```
+
+このコマンドラインはデバイスツリーの`chosen`ノードの`bootargs`パラメータから渡すことができます。`chosen`ノードは実際のデバイスを表すものではなく、ファームウェアとOS間でデータをやりとりするためのノードです。そして`bootargs`はLinuxに渡すコマンドライン引数です。`root=/dev/vda`によってルートファイルシステムの位置を指定しており、`console=ttyS0`は出力すべきコンソールデバイスを指定しています。
+
+この無限ループのバグは、初期化すべきコンソールが永遠に見つからないことが原因でした。
+
 ```
 chosen {
     bootargs = "root=/dev/vda ro console=ttyS0";
     stdout-path = "/uart@10000000";
-}
+};
 ```
 
+QEMUのvirtマシンを参考にして作っているため、デバイスツリーもQEMUを参考にしました。QEMUは以下のコマンドによってデバイスツリーのバイナリを出力することができます。更に、`dtc`コマンドによってこのバイナリを文字列の形式に変換することもできます。
+
+```
+// デバイスツリーのバイナリを出力
+$ qemu-system-riscv64 -nographic -machine virt,dumpdtb=virt.dtb
+// バイナリから文字列へ変換
+$ dtc -I dtb -O dts virt.dtb > virt.dts
+```
+
+このデバイスツリーをみたところ、`chosen`ノードの`bootargs`は以下のように空でした。これを単純に真似したことがバグを生み出しました。
+
+```
+chosen {
+    bootargs = [00];
+    stdout-path = "/uart@10000000";
+};
+```
+
+QEMUではQEMUの実行時に`-append "root=/dev/vda ro console=ttyS0"`のパラメータを渡すことで、動的にデバイスツリーのバイナリを変更しているようです。
 
 ### Bug 2: vfs_caches_init()で無限ループ
 
@@ -76,3 +111,7 @@ RISC-Vではロックのような機構を実装するためにアトミック�
 以前はこれらの命令をアトミックではなく単なるロード・ストア命令として実装していたため、常に`sc`命令が成功していました。よって、複数のスレッドが同じリソースへのロックを持つことができてしまい、デッドロックのような状態に陥ってしまったのではないかと思います。
 
 エミュレータ上で`lr`命令を実行するときに指定されたメモリの位置を保存するようにし、`sc`命令を実行するときに指定されたメモリの位置がすでに保存されているかチェックするようにしました。これにより無限ループのバグは解決できました。
+
+## おわりに
+
+進捗は[d0iasmのTwitter](https://twitter.com/d0iasm)でつぶやいています。はやくLinuxのユーザーログインまでたどり着きたいです！
